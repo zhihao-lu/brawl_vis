@@ -23,8 +23,9 @@ ui <- dashboardPage(dashboardHeader(),
                         box(
                           width = 4,
                           status = "info",
-                          title = "Win rate (rounds played)",
-                          tableOutput("modeTable")
+                          title = "My best brawlers",
+                          tableOutput("brawlerTable"),
+                          footer = "Played at least 2 times"
                         )
                       )
                     )
@@ -86,7 +87,10 @@ server <- function(input, output) {
   })
   
 # Win rate chart
-  plotData <- inner_join(countWins(data), select(data,Event, Mode, SD), by = "SD") %>% distinct() %>% mutate(Status = ifelse(a == 1, "win","lose"))
+  plotData <- inner_join(countWins(data), select(data,Event, Mode, SD), by = "SD") %>% 
+    distinct() %>% 
+    mutate(Status = ifelse(a == 1, "win","lose"))
+  
   output$packagePlot <- renderPlot({
     ggplot(plotData) +
     geom_bar(aes(x = Event, fill = Status)) +
@@ -95,16 +99,26 @@ server <- function(input, output) {
   
   
 # Table for mode  
-  output$modeTable <- renderTable({
-    data %>% 
-    group_by(Event, Mode) %>% 
-    summarise("Win Rate" = mean(countWins(data, Event, Mode)$a), "Games Played" = nrow(countWins(data, Event, mode = Mode ))) %>%
-    mutate("Win Rate" = paste0(round(`Win Rate`,2), " (",`Games Played`,")")) %>%
-    select(1:3) %>%
-    spread(Mode, `Win Rate`) %>%
-    arrange(desc(teamRanked))
+  # output$modeTable <- renderTable({
+  #   data %>% 
+  #   group_by(Event, Mode) %>% 
+  #   summarise("Win Rate" = mean(countWins(data, Event, Mode)$a), "Games Played" = nrow(countWins(data, Event, mode = Mode ))) %>%
+  #   mutate("Win Rate" = paste0(round(`Win Rate`,2), " (",`Games Played`,")")) %>%
+  #   select(1:3) %>%
+  #   spread(Mode, `Win Rate`) %>%
+  #   arrange(desc(teamRanked))
+  # })
+
+#My best brawler table
+  output$brawlerTable <- renderTable({
+    inner_join(countWins(data), select(data,Me, Mode, SD), by = "SD") %>% 
+    distinct() %>% 
+    group_by(Me) %>% 
+    summarise("Win%" = mean(a), "Count" = n()) %>%
+    mutate("Win%" = round(`Win%`*100,2)) %>%
+    filter(Count > 1) %>%
+    slice_max(`Win%`, n=5)
   })
-  
 
   data_new <- mutate(data, day = date(ymd_hms(DateTime)))
   #data_filter <- filter(data, Event == input$maptype)
