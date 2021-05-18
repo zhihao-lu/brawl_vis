@@ -4,11 +4,16 @@ library(googlesheets4)
 library(shiny)
 library(shinydashboard)
 
+
 ui <- dashboardPage(dashboardHeader(),
                     dashboardSidebar(),
                     dashboardBody(
-                     valueBoxOutput("winRateBox")))
-                      
+                      fluidRow(
+                        valueBoxOutput("winRateBox"),
+                        valueBoxOutput("soloWinRateBox"),
+                        valueBoxOutput("teamWinRateBox")
+                    )))
+
                    
 
 server <- function(input, output) {
@@ -22,13 +27,14 @@ server <- function(input, output) {
       sheet = "Sheet3"
     )
   
+  #function to count win rate
   countWins <- function(data, event, mode) {
     if (!missing(event)) {
-      data <- filter(data, Event = event)
+      data <- filter(data, Event == event)
     }
-    
+
     if (!missing(mode)) {
-      data <- filter(data, Mode = mode)
+      data <- filter(data, Mode == mode)
     }
     
     output <- data  %>%
@@ -40,14 +46,29 @@ server <- function(input, output) {
   
   winRate <- round(mean(countWins(data)$a) * 100,2)
   print(winRate)
-  
   output$winRateBox <- renderValueBox({
     valueBox(
-      paste0(winRate,"%"), paste0("Win Rate out of ", nrow(countWins(data))," games played"), icon = icon("list"),
+      paste0(winRate,"%"), paste0("Win rate out of ", nrow(countWins(data))," games played"),
       color = "purple"
     )
   })
   
+  soloWinRate <- round(mean(countWins(data, mode = "soloRanked")$a) * 100,2)
+  output$soloWinRateBox <- renderValueBox({
+    valueBox(
+      paste0(soloWinRate,"%"), paste0("Solo win rate out of ", nrow(countWins(data, mode = "soloRanked"))," games played"),
+      color = "blue"
+    )
+  })
+
+  teamWinRate <- round(mean(countWins(data, mode = "teamRanked")$a) * 100,2)
+  output$teamWinRateBox <- renderValueBox({
+    valueBox(
+      paste0(teamWinRate,"%"), paste0("Team win rate out of ", nrow(countWins(data, mode = "teamRanked"))," games played"),
+      color = "red"
+    )
+  })
+
   data_new <- mutate(data, day = date(ymd_hms(DateTime)))
   #data_filter <- filter(data, Event == input$maptype)
   output$plot <- renderPlot({
