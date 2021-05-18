@@ -12,7 +12,23 @@ ui <- dashboardPage(dashboardHeader(),
                         valueBoxOutput("winRateBox"),
                         valueBoxOutput("soloWinRateBox"),
                         valueBoxOutput("teamWinRateBox")
-                    )))
+                    ),
+                    
+                      fluidRow(
+                        box(
+                          width = 8, status = "info", solidHeader = FALSE,
+                          title = "Wins and games played",
+                          plotOutput("packagePlot", width = "100%", height = 600)
+                        ), 
+                        box(
+                          width = 4,
+                          status = "info",
+                          title = "Win rate (rounds played)",
+                          tableOutput("modeTable")
+                        )
+                      )
+                    )
+                  )
 
                    
 
@@ -68,6 +84,27 @@ server <- function(input, output) {
       color = "red"
     )
   })
+  
+# Win rate chart
+  plotData <- inner_join(countWins(data), select(data,Event, Mode, SD), by = "SD") %>% distinct() %>% mutate(Status = ifelse(a == 1, "win","lose"))
+  output$packagePlot <- renderPlot({
+    ggplot(plotData) +
+    geom_bar(aes(x = Event, fill = Status)) +
+    facet_wrap(~Mode)
+  })
+  
+  
+# Table for mode  
+  output$modeTable <- renderTable({
+    data %>% 
+    group_by(Event, Mode) %>% 
+    summarise("Win Rate" = mean(countWins(data, Event, Mode)$a), "Games Played" = nrow(countWins(data, Event, mode = Mode ))) %>%
+    mutate("Win Rate" = paste0(round(`Win Rate`,2), " (",`Games Played`,")")) %>%
+    select(1:3) %>%
+    spread(Mode, `Win Rate`) %>%
+    arrange(desc(teamRanked))
+  })
+  
 
   data_new <- mutate(data, day = date(ymd_hms(DateTime)))
   #data_filter <- filter(data, Event == input$maptype)
@@ -78,3 +115,7 @@ server <- function(input, output) {
 }
 
 shinyApp(ui = ui, server = server)
+
+
+
+
