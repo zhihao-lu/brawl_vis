@@ -3,6 +3,9 @@ library(lubridate)
 library(googlesheets4)
 library(shiny)
 library(shinydashboard)
+source("progress_bar.R")
+
+BASIC_COLORS <- c("blue", "green", "aqua", "yellow", "red")
 
 
 ui <- dashboardPage(dashboardHeader(),
@@ -24,8 +27,9 @@ ui <- dashboardPage(dashboardHeader(),
                           width = 2,
                           status = "info",
                           title = "My best brawlers",
-                          tableOutput("brawlerTable"),
-                          footer = "Played at least 2 times"
+                          #tableOutput("brawlerTable"),
+                          uiOutput("brawlerProgress"),
+                          helpText("Played at least 2 times")
                         ),
                         box(
                           width = 2,
@@ -125,7 +129,29 @@ server <- function(input, output) {
     mutate("Win%" = round(`Win%`*100,2)) %>%
     filter(Count > 1) %>%
     slice_max(`Win%`, n=5)
+    
+    
+
   })
+  
+  output$brawlerProgress <- renderUI({
+    bb <- inner_join(countWins(data), select(data,Me, Mode, SD), by = "SD") %>% 
+      distinct() %>% 
+      group_by(Me) %>% 
+      summarise("Win%" = mean(a), "Count" = n()) %>%
+      mutate("Win%" = round(`Win%`*100,2)) %>%
+      filter(Count > 1) %>%
+      slice_max(`Win%`, n=5)
+    
+    
+    
+    tags$div(
+      map(seq_len(min(5, nrow(bb))), ~ {
+        progressGroup(bb$Me[.], bb$`Win%`[.], max = 100, color = BASIC_COLORS[.])
+      })
+    )
+  })
+  
 
   
   #My best map table
