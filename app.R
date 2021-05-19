@@ -52,14 +52,23 @@ ui <- dashboardPage(dashboardHeader(),
                     
                     #### Maps
                     tabItem("Maps",
-                            h2("Widgets tab content"))
+                      radioButtons("mapMode", "Game mode",
+                                   c("Heist" = "heist",
+                                     "Bounty" = "bounty",
+                                     "Gem Grab" = "gemGrab",
+                                     "Brawl Ball" = "brawlBall",
+                                     "Siege" = "siege",
+                                     "Hot Zone" = "hotZone")),
+                      uiOutput("mapList")
+                    #can use tabsets to sort by my own suggestions, youtubers, etc
                     )
                     )
                   )
-
+)
                    
 
 server <- function(input, output) {
+  output$txt <- renderText({input$mapMode})
   #options(gargle_oauth_cache = ".secrets")
   #gs4_auth()
   options(gargle_oauth_cache = ".secrets",
@@ -194,6 +203,23 @@ server <- function(input, output) {
       })
     )
   })
+  
+  
+  
+  ##### maps tab
+  
+  # maps dropdown controls
+  output$mapList <- renderUI({
+    maps <- data %>% 
+      select(Event, Map) %>% 
+      filter(Event == input$mapMode) %>% 
+      distinct() %>% 
+      select(Map)
+    selectInput("map", "Choose map", maps)
+  })
+  
+  
+  
   data_new <- mutate(data, day = date(ymd_hms(DateTime)))
   #data_filter <- filter(data, Event == input$maptype)
   output$plot <- renderPlot({
@@ -203,6 +229,7 @@ server <- function(input, output) {
 }
 
 shinyApp(ui = ui, server = server)
+
 
 
 
