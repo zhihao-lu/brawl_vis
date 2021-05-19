@@ -21,10 +21,17 @@ ui <- dashboardPage(dashboardHeader(),
                           plotOutput("packagePlot", width = "100%", height = 600)
                         ), 
                         box(
-                          width = 4,
+                          width = 2,
                           status = "info",
                           title = "My best brawlers",
                           tableOutput("brawlerTable"),
+                          footer = "Played at least 2 times"
+                        ),
+                        box(
+                          width = 2,
+                          status = "info",
+                          title = "My best maps",
+                          tableOutput("mapTable"),
                           footer = "Played at least 2 times"
                         )
                       )
@@ -109,7 +116,7 @@ server <- function(input, output) {
   #   arrange(desc(teamRanked))
   # })
 
-#My best brawler table
+  #My best brawler table
   output$brawlerTable <- renderTable({
     inner_join(countWins(data), select(data,Me, Mode, SD), by = "SD") %>% 
     distinct() %>% 
@@ -120,6 +127,19 @@ server <- function(input, output) {
     slice_max(`Win%`, n=5)
   })
 
+  
+  #My best map table
+  output$mapTable <- renderTable({
+    inner_join(countWins(data), select(data,Map, Mode, SD, Event), by = "SD") %>% 
+      distinct() %>% 
+      group_by(Map) %>% 
+      summarise("Win%" = mean(a), "Count" = n(), Event) %>%
+      mutate("Win%" = round(`Win%`*100,2)) %>%
+      distinct() %>%
+      filter(Count > 1) %>%
+      ungroup %>%
+      slice_max(`Win%`, n=5) 
+  })
   data_new <- mutate(data, day = date(ymd_hms(DateTime)))
   #data_filter <- filter(data, Event == input$maptype)
   output$plot <- renderPlot({
