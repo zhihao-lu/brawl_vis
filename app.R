@@ -47,7 +47,16 @@ ui <- dashboardPage(dashboardHeader(),
                           uiOutput("mapProgress"),
                           footer = "Played at least 2 times"
                         )
-                      )
+                      ),
+                    fluidRow(
+                      radioButtons("dateFilter", "Period",
+                                   c("All" = 999999,
+                                     "1 Day" = 1,
+                                     "1 Week" = 7,
+                                     "1 Month" = 30,
+                                     "1 Year" = 365
+                                     ))
+                                    )
                       ),
                     
                     #### Maps
@@ -73,18 +82,25 @@ server <- function(input, output) {
   #gs4_auth()
   options(gargle_oauth_cache = ".secrets",
           gargle_oauth_email = TRUE)
-  data <-
+  raw_data <-
     read_sheet(
       "https://docs.google.com/spreadsheets/d/1-b6HCSTrTdS12dLWhqq3VzWGPrWf9sbN1r1L4vWNzAI/edit#gid=2008828887",
       sheet = "Sheet3"
     )
   
+  
+  data <- reactive({
+
+    filter(data, between(ymd_hms(DateTime), now()-days(input$dateFilter), now()))
+  
+  })
+  
   # add NUMBER.png to the back
   badgeURL <- "https://cdn.brawlstats.com/ranked-ranks/ranked_ranks_l_"
   
   
-  soloData <- filter(data, Mode == "soloRanked")
-  teamData <- filter(data, Mode == "teamRanked")
+  soloData <- filter(data(), Mode == "soloRanked")
+  teamData <- filter(data(), Mode == "teamRanked")
   
   
   
@@ -114,34 +130,40 @@ server <- function(input, output) {
     return(output)
   }
   
-  winRate <- round(mean(countWins(data)$a) * 100,2)
+  #function to return the full dataframe with countwins appended
+  fullCountWins <- function(data, cw) {
+    out <- left_join(cw, data, by = "SD")
+    return(out)
+  }
+  
+  winRate <- round(mean(countWins(data())$a) * 100,2)
   print(winRate)
   output$winRateBox <- renderValueBox({
     valueBox(
-      div(paste0(winRate,"%"), tags$img(src = bestBadgeURL, height="100px", width="200px")), paste0("Win rate out of ", nrow(countWins(data))," games played"),
+      div(paste0(winRate,"%"), tags$img(src = bestBadgeURL, height="100px", width="200px")), paste0("Win rate out of ", nrow(countWins(data()))," games played"),
       color = "purple"
     )
   })
   
-  soloWinRate <- round(mean(countWins(data, mode = "soloRanked")$a) * 100,2)
+  soloWinRate <- round(mean(countWins(data(), mode = "soloRanked")$a) * 100,2)
   output$soloWinRateBox <- renderValueBox({
     valueBox(
-      div(paste0(soloWinRate,"%"), tags$img(src = soloBadgeURL, height="100px", width="200px")), paste0("Solo win rate out of ", nrow(countWins(data, mode = "soloRanked"))," games played"),
+      div(paste0(soloWinRate,"%"), tags$img(src = soloBadgeURL, height="100px", width="200px")), paste0("Solo win rate out of ", nrow(countWins(data(), mode = "soloRanked"))," games played"),
       color = "blue", icon = 
     )
   })
 
-  teamWinRate <- round(mean(countWins(data, mode = "teamRanked")$a) * 100,2)
+  teamWinRate <- round(mean(countWins(data(), mode = "teamRanked")$a) * 100,2)
   output$teamWinRateBox <- renderValueBox({
     valueBox(
-      div(paste0(teamWinRate,"%"), tags$img(src = teamBadgeURL, height="100px", width="200px")), paste0("Team win rate out of ", nrow(countWins(data, mode = "teamRanked"))," games played"),
+      div(paste0(teamWinRate,"%"), tags$img(src = teamBadgeURL, height="100px", width="200px")), paste0("Team win rate out of ", nrow(countWins(data(), mode = "teamRanked"))," games played"),
       color = "red"
     )
   })
   
   
 # Win rate chart
-  plotData <- inner_join(countWins(data), select(data,Event, Mode, SD), by = "SD") %>% 
+  plotData <- inner_join(countWins(data()), select(data(),Event, Mode, SD), by = "SD") %>% 
     distinct() %>% 
     mutate(Status = ifelse(a == 1, "win","lose"))
   
@@ -154,9 +176,9 @@ server <- function(input, output) {
   
 # Table for mode  
   # output$modeTable <- renderTable({
-  #   data %>% 
+  #   data() %>% 
   #   group_by(Event, Mode) %>% 
-  #   summarise("Win Rate" = mean(countWins(data, Event, Mode)$a), "Games Played" = nrow(countWins(data, Event, mode = Mode ))) %>%
+  #   summarise("Win Rate" = mean(countWins(data(), Event, Mode)$a), "Games Played" = nrow(countWins(data(), Event, mode = Mode ))) %>%
   #   mutate("Win Rate" = paste0(round(`Win Rate`,2), " (",`Games Played`,")")) %>%
   #   select(1:3) %>%
   #   spread(Mode, `Win Rate`) %>%
@@ -166,7 +188,7 @@ server <- function(input, output) {
 
   #My best brawler progress bar
   output$brawlerProgress <- renderUI({
-    bb <- inner_join(countWins(data), select(data,Me, Mode, SD), by = "SD") %>% 
+    bb <- inner_join(countWins(data()), select(data(),Me, Mode, SD), by = "SD") %>% 
       distinct() %>% 
       group_by(Me) %>% 
       summarise("Win%" = mean(a), "Count" = n()) %>%
@@ -187,7 +209,7 @@ server <- function(input, output) {
   
   #My best map table
   output$mapProgress <- renderUI({
-    bm <- inner_join(countWins(data), select(data,Map, Mode, SD, Event), by = "SD") %>% 
+    bm <- inner_join(countWins(data()), select(data(),Map, Mode, SD, Event), by = "SD") %>% 
       distinct() %>% 
       group_by(Map) %>% 
       summarise("Win%" = mean(a), "Count" = n(), Event) %>%
@@ -218,7 +240,25 @@ server <- function(input, output) {
     selectInput("map", "Choose map", maps)
   })
   
+  #strip friendly tag identification
   
+  tagStrip <- function(tag) {
+    return(str_remove_all(tag, "\\(.+\\)"))
+  }
+  
+  mapData <- data %>%
+              mutate(Friend2 = tagStrip(Friend2), Friend3 = tagStrip(Friend3)) %>%
+              rowwise() %>%
+              mutate(set = paste0(sort(c(Me, Friend2, Friend3)), collapse = ','))
+  #test1 <- fullCountWins(mapData, countWins(mapData, "bounty"))
+    
+  
+  
+  
+  
+  #brawler per game chosen
+  #fullCountWins(data %>% gather(key = "Role", value = "Brawler", 5,7,9,11,13,15), countWins(data)) %>% select(-DateTime) %>% distinct()
+  #test1 %>% group_by(Brawler) %>% filter(Event == "bounty") %>% summarise(win = mean(a), n())
   
   data_new <- mutate(data, day = date(ymd_hms(DateTime)))
   #data_filter <- filter(data, Event == input$maptype)
