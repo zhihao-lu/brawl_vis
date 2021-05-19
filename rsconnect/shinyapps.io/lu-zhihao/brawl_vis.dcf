@@ -1,0 +1,13 @@
+name: brawl_vis
+title: brawl_vis
+username:
+account: lu-zhihao
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 3865699
+bundleId: 4614686
+url: https://lu-zhihao.shinyapps.io/brawl_vis/
+when: 1621408787.60091
+lastSyncTime: 1621408787.60091
+asMultiple: FALSE
+asStatic: FALSE

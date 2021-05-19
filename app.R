@@ -9,8 +9,17 @@ BASIC_COLORS <- c("blue", "green", "aqua", "yellow", "red")
 
 
 ui <- dashboardPage(dashboardHeader(),
-                    dashboardSidebar(),
+                    dashboardSidebar(  
+                      sidebarMenu(
+                        menuItem("Overview", tabName = "Overview", icon = icon("dashboard")),
+                        menuItem("Maps", icon = icon("th"), tabName = "Maps")
+                    )),
+                    
                     dashboardBody(
+                    tabItems(
+                      
+                      #overview tab
+                      tabItem("Overview",
                       fluidRow(
                         valueBoxOutput("winRateBox"),
                         valueBoxOutput("soloWinRateBox"),
@@ -39,6 +48,12 @@ ui <- dashboardPage(dashboardHeader(),
                           footer = "Played at least 2 times"
                         )
                       )
+                      ),
+                    
+                    #### Maps
+                    tabItem("Maps",
+                            h2("Widgets tab content"))
+                    )
                     )
                   )
 
