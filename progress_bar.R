@@ -50,7 +50,7 @@ progressGroup <- function(text, value, min = 0, max = value, color = "aqua") {
   tags$div(
     class = "progress-group",
     tags$span(class = "progress-text", text),
-    tags$span(class = "progress-number", sprintf("%f / %d", value, max)),
+    tags$span(class = "progress-number", sprintf("%.2f%%", value, max)),
     progressBar(round(value / max * 100), color = color, size = "sm")
   )
 }

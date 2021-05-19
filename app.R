@@ -21,10 +21,10 @@ ui <- dashboardPage(dashboardHeader(),
                         box(
                           width = 8, status = "info", solidHeader = FALSE,
                           title = "Wins and games played",
-                          plotOutput("packagePlot", width = "100%", height = 600)
+                          plotOutput("packagePlot", width = "100%", height = 700)
                         ), 
                         box(
-                          width = 2,
+                          width = 4,
                           status = "info",
                           title = "My best brawlers",
                           #tableOutput("brawlerTable"),
@@ -32,10 +32,10 @@ ui <- dashboardPage(dashboardHeader(),
                           helpText("Played at least 2 times")
                         ),
                         box(
-                          width = 2,
+                          width = 4,
                           status = "info",
                           title = "My best maps",
-                          tableOutput("mapTable"),
+                          uiOutput("mapProgress"),
                           footer = "Played at least 2 times"
                         )
                       )
@@ -54,6 +54,24 @@ server <- function(input, output) {
       "https://docs.google.com/spreadsheets/d/1-b6HCSTrTdS12dLWhqq3VzWGPrWf9sbN1r1L4vWNzAI/edit#gid=2008828887",
       sheet = "Sheet3"
     )
+  
+  # add NUMBER.png to the back
+  badgeURL <- "https://cdn.brawlstats.com/ranked-ranks/ranked_ranks_l_"
+  
+  
+  soloData <- filter(data, Mode == "soloRanked")
+  teamData <- filter(data, Mode == "teamRanked")
+  
+  
+  
+  #current rank for each mode
+  soloRank <- soloData$MeRank[[nrow(soloData)]]
+  teamRank <- teamData$MeRank[[nrow(teamData)]]
+  bestRank <- max(soloRank, teamRank)
+  
+  soloBadgeURL <- paste0(badgeURL, soloRank, ".png")
+  teamBadgeURL <- paste0(badgeURL, teamRank, ".png")
+  bestBadgeURL <- paste0(badgeURL, bestRank, ".png")
   
   #function to count win rate
   countWins <- function(data, event, mode) {
@@ -76,7 +94,7 @@ server <- function(input, output) {
   print(winRate)
   output$winRateBox <- renderValueBox({
     valueBox(
-      paste0(winRate,"%"), paste0("Win rate out of ", nrow(countWins(data))," games played"),
+      div(paste0(winRate,"%"), tags$img(src = bestBadgeURL, height="100px", width="200px")), paste0("Win rate out of ", nrow(countWins(data))," games played"),
       color = "purple"
     )
   })
@@ -84,18 +102,19 @@ server <- function(input, output) {
   soloWinRate <- round(mean(countWins(data, mode = "soloRanked")$a) * 100,2)
   output$soloWinRateBox <- renderValueBox({
     valueBox(
-      paste0(soloWinRate,"%"), paste0("Solo win rate out of ", nrow(countWins(data, mode = "soloRanked"))," games played"),
-      color = "blue"
+      div(paste0(soloWinRate,"%"), tags$img(src = soloBadgeURL, height="100px", width="200px")), paste0("Solo win rate out of ", nrow(countWins(data, mode = "soloRanked"))," games played"),
+      color = "blue", icon = 
     )
   })
 
   teamWinRate <- round(mean(countWins(data, mode = "teamRanked")$a) * 100,2)
   output$teamWinRateBox <- renderValueBox({
     valueBox(
-      paste0(teamWinRate,"%"), paste0("Team win rate out of ", nrow(countWins(data, mode = "teamRanked"))," games played"),
+      div(paste0(teamWinRate,"%"), tags$img(src = teamBadgeURL, height="100px", width="200px")), paste0("Team win rate out of ", nrow(countWins(data, mode = "teamRanked"))," games played"),
       color = "red"
     )
   })
+  
   
 # Win rate chart
   plotData <- inner_join(countWins(data), select(data,Event, Mode, SD), by = "SD") %>% 
@@ -120,20 +139,8 @@ server <- function(input, output) {
   #   arrange(desc(teamRanked))
   # })
 
-  #My best brawler table
-  output$brawlerTable <- renderTable({
-    inner_join(countWins(data), select(data,Me, Mode, SD), by = "SD") %>% 
-    distinct() %>% 
-    group_by(Me) %>% 
-    summarise("Win%" = mean(a), "Count" = n()) %>%
-    mutate("Win%" = round(`Win%`*100,2)) %>%
-    filter(Count > 1) %>%
-    slice_max(`Win%`, n=5)
-    
-    
 
-  })
-  
+  #My best brawler progress bar
   output$brawlerProgress <- renderUI({
     bb <- inner_join(countWins(data), select(data,Me, Mode, SD), by = "SD") %>% 
       distinct() %>% 
@@ -147,7 +154,7 @@ server <- function(input, output) {
     
     tags$div(
       map(seq_len(min(5, nrow(bb))), ~ {
-        progressGroup(bb$Me[.], bb$`Win%`[.], max = 100, color = BASIC_COLORS[.])
+        progressGroup(paste0(bb$Me[.], "(",bb$Count[.],")"), bb$`Win%`[.], max = 100, color = BASIC_COLORS[.])
       })
     )
   })
@@ -155,8 +162,8 @@ server <- function(input, output) {
 
   
   #My best map table
-  output$mapTable <- renderTable({
-    inner_join(countWins(data), select(data,Map, Mode, SD, Event), by = "SD") %>% 
+  output$mapProgress <- renderUI({
+    bm <- inner_join(countWins(data), select(data,Map, Mode, SD, Event), by = "SD") %>% 
       distinct() %>% 
       group_by(Map) %>% 
       summarise("Win%" = mean(a), "Count" = n(), Event) %>%
@@ -165,6 +172,12 @@ server <- function(input, output) {
       filter(Count > 1) %>%
       ungroup %>%
       slice_max(`Win%`, n=5) 
+    
+    tags$div(
+      map(seq_len(min(5, nrow(bm))), ~ {
+        progressGroup(paste0(bm$Map[.], "(",bm$Count[.],")"), bm$`Win%`[.], max = 100, color = BASIC_COLORS[.])
+      })
+    )
   })
   data_new <- mutate(data, day = date(ymd_hms(DateTime)))
   #data_filter <- filter(data, Event == input$maptype)
