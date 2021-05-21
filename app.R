@@ -24,9 +24,10 @@ ui <- dashboardPage(dashboardHeader(),
                       #overview tab
                       tabItem("Overview",
                       fluidRow(
-                        valueBoxOutput("winRateBox"),
+                        
                         valueBoxOutput("soloWinRateBox"),
-                        valueBoxOutput("teamWinRateBox")
+                        valueBoxOutput("teamWinRateBox"),
+                        valueBoxOutput("winRateBox")
                     ),
                     
                       fluidRow(
@@ -64,23 +65,26 @@ ui <- dashboardPage(dashboardHeader(),
                     
                     #### Maps
                     tabItem("Maps",
-                      radioButtons("mapMode", "Game mode",
+                      fluidRow(radioButtons("mapMode", "Game mode",
                                    c("Heist" = "heist",
                                      "Bounty" = "bounty",
                                      "Gem Grab" = "gemGrab",
                                      "Brawl Ball" = "brawlBall",
                                      "Siege" = "siege",
                                      "Hot Zone" = "hotZone")),
-                      uiOutput("mapList")
+                      uiOutput("mapList")),
+                      fluidRow(
+                      tableOutput("brawlerByMap"))
                     #can use tabsets to sort by my own suggestions, youtubers, etc
                     )
+                   
                     )
                   )
 )
                    
 
 server <- function(input, output) {
-  output$txt <- renderText({input$mapMode})
+  
   #options(gargle_oauth_cache = ".secrets")
   #gs4_auth()
   options(gargle_oauth_cache = ".secrets",
@@ -144,7 +148,7 @@ server <- function(input, output) {
   
    output$winRateBox <- renderValueBox({
      validate(
-       need(nrow(data()) > 0, "No matches found!" )
+       need(nrow(data()) > 0, "No games found!" )
      )
      valueBox(
        div(paste0(winRate(),"%"), tags$img(src = bestBadgeURL(), height="100px", width="200px")), paste0("Win rate out of ", nrow(countWins(data()))," games played"),
@@ -155,7 +159,7 @@ server <- function(input, output) {
    soloWinRate <- reactive({round(mean(countWins(data(), mode = "soloRanked")$a) * 100,2)})
    output$soloWinRateBox <- renderValueBox({
      validate(
-       need(nrow(data()) > 0, "No matches found!" )
+       need(soloWinRate(), "No games found!" )
      )
      valueBox(
        div(paste0(soloWinRate(),"%"), tags$img(src = soloBadgeURL(), height="100px", width="200px")), paste0("Solo win rate out of ", nrow(countWins(data(), mode = "soloRanked"))," games played"),
@@ -166,7 +170,7 @@ server <- function(input, output) {
    teamWinRate <- reactive({round(mean(countWins(data(), mode = "teamRanked")$a) * 100,2)})
    output$teamWinRateBox <- renderValueBox({
      validate(
-       need(nrow(data()) > 0, "No matches found!" )
+       need(nrow(data()) > 0, "No games found!" )
      )
      valueBox(
        div(paste0(teamWinRate(),"%"), tags$img(src = teamBadgeURL(), height="100px", width="200px")), paste0("Team win rate out of ", nrow(countWins(data(), mode = "teamRanked"))," games played"),
@@ -182,7 +186,7 @@ server <- function(input, output) {
 
    output$packagePlot <- renderPlot({
      validate(
-       need(nrow(data()) > 0, "No matches found!" )
+       need(nrow(data()) > 0, "No games found!" )
      )
      ggplot(plotData()) +
      geom_bar(aes(x = Event, fill = Status)) +
@@ -193,7 +197,7 @@ server <- function(input, output) {
 # Table for mode
   output$modeTable <- renderTable({
     validate(
-      need(nrow(data()) > 0, "No matches found!" )
+      need(nrow(data()) > 0, "No games found!" )
     )
     data() %>%
      group_by(Event, Mode) %>%
@@ -208,7 +212,7 @@ server <- function(input, output) {
    #My best brawler progress bar
    output$brawlerProgress <- renderUI({
      validate(
-       need(nrow(data()) > 0, "No matches found!" )
+       need(nrow(data()) > 0, "No games found!" )
      )
      bb <- inner_join(countWins(data()), select(data(),Me, Mode, SD), by = "SD") %>%
        distinct() %>%
@@ -232,7 +236,7 @@ server <- function(input, output) {
    #My best map table
    output$mapProgress <- renderUI({
      validate(
-       need(nrow(data()) > 0, "No matches found!" )
+       need(nrow(data()) > 0, "No games found!" )
      )
      bm <- inner_join(countWins(data()), select(data(),Map, Mode, SD, Event), by = "SD") %>%
        distinct() %>%
@@ -264,25 +268,54 @@ server <- function(input, output) {
       select(Map)
     selectInput("map", "Choose map", maps)
   })
+
+  mapData <- reactive({filter(raw_data, Map == input$map)})
+  
   
   #strip friendly tag identification
+  
+  
   
   tagStrip <- function(tag) {
     return(str_remove_all(tag, "\\(.+\\)"))
   }
-  
-  mapData <- raw_data %>%
-              mutate(Friend2 = tagStrip(Friend2), Friend3 = tagStrip(Friend3)) %>%
-              rowwise() %>%
-              mutate(set = paste0(sort(c(Me, Friend2, Friend3)), collapse = ','))
-  #test1 <- fullCountWins(mapData, countWins(mapData, "bounty"))
+  # 
+  # 
+  # #brawlers collapsed
+  # mapData <- raw_data %>%
+  #             mutate(Friend2 = tagStrip(Friend2), Friend3 = tagStrip(Friend3)) %>%
+  #             rowwise() %>%
+  #             mutate(set = paste0(sort(c(Me, Friend2, Friend3)), collapse = ','))
+  # #test1 <- fullCountWins(mapData, countWins(mapData, "bounty"))
+  # 
+  # most picked brawlers for this map
+  output$brawlerByMap <- renderTable({
+    validate(
+      need(nrow(mapData()) > 0, "No games found!" )
+    )
     
+
+    bb <- fullCountWins(mapData() %>% gather(key = "Role", value = "Brawler", 5,7,9,11,13,15), countWins(mapData())) %>%
+      select(-DateTime) %>%
+      distinct() %>%
+      mutate(Brawler = tagStrip(Brawler)) %>%
+      group_by(Brawler) %>%
+      summarise("Win Rate" = mean(a)*100, "Pick Rate" = n()) %>%
+      arrange(desc(`Win Rate`), desc(`Pick Rate`)) %>%
+      slice_max(`Win Rate`, n=5)
+
+    fullCountWins(mapData(), countWins(mapData())) %>% select(Map, Me, Friend2, Friend3, Enemy1, Enemy2, Enemy3, a) %>% distinct()
+
+    # tags$div(
+    #   map(seq_len(min(5, nrow(bb))), ~ {
+    #     progressGroup(paste0(bb$Brawler[.], "(",bb$`Pick Rate`[.],")"), bb$`Win Rate`[.], max = 100, color = BASIC_COLORS[.])
+    #   })
+    # )
+  })
+
+
   
-  
-  
-  
-  #brawler per game chosen
-  #fullCountWins(data %>% gather(key = "Role", value = "Brawler", 5,7,9,11,13,15), countWins(data)) %>% select(-DateTime) %>% distinct()
+
   #test1 %>% group_by(Brawler) %>% filter(Event == "bounty") %>% summarise(win = mean(a), n())
   
   # data_new <- mutate(data, day = date(ymd_hms(DateTime)))
