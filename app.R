@@ -7,6 +7,9 @@ source("progress_bar.R")
 
 BASIC_COLORS <- c("blue", "green", "aqua", "yellow", "red")
 
+### TODO
+#TABSET for chart for each game mode
+#adjust how many brawlers and maps to see for best
 
 ui <- dashboardPage(dashboardHeader(),
                     dashboardSidebar(  
@@ -55,7 +58,7 @@ ui <- dashboardPage(dashboardHeader(),
                                      "1 Week" = 7,
                                      "1 Month" = 30,
                                      "1 Year" = 365
-                                     ))
+                                     ), inline = TRUE)
                                     )
                       ),
                     
@@ -88,13 +91,13 @@ server <- function(input, output) {
       sheet = "Sheet3"
     )
   
-  
+  #filter data based on dateFilter
   data <- reactive({
 
-    dplyr::filter(raw_data, between(ymd_hms(DateTime), now()-days(input$dateFilter), now()))
+    filter(raw_data, between(ymd_hms(DateTime), now()-days(input$dateFilter), now()))
   
   })
-  
+ 
   # add NUMBER.png to the back
   badgeURL <- "https://cdn.brawlstats.com/ranked-ranks/ranked_ranks_l_"
   
@@ -115,7 +118,7 @@ server <- function(input, output) {
   
   #function to count win rate
   countWins <- function(data, event, mode) {
-    data <- data()
+    #data <- data()
     if (!missing(event)) {
       data <- filter(data, Event == event)
     }
@@ -140,6 +143,9 @@ server <- function(input, output) {
    winRate <- reactive({round(mean(countWins(data())$a) * 100,2)})
   
    output$winRateBox <- renderValueBox({
+     validate(
+       need(nrow(data()) > 0, "No matches found!" )
+     )
      valueBox(
        div(paste0(winRate(),"%"), tags$img(src = bestBadgeURL(), height="100px", width="200px")), paste0("Win rate out of ", nrow(countWins(data()))," games played"),
        color = "purple"
@@ -148,6 +154,9 @@ server <- function(input, output) {
   
    soloWinRate <- reactive({round(mean(countWins(data(), mode = "soloRanked")$a) * 100,2)})
    output$soloWinRateBox <- renderValueBox({
+     validate(
+       need(nrow(data()) > 0, "No matches found!" )
+     )
      valueBox(
        div(paste0(soloWinRate(),"%"), tags$img(src = soloBadgeURL(), height="100px", width="200px")), paste0("Solo win rate out of ", nrow(countWins(data(), mode = "soloRanked"))," games played"),
        color = "blue", icon =
@@ -156,6 +165,9 @@ server <- function(input, output) {
   
    teamWinRate <- reactive({round(mean(countWins(data(), mode = "teamRanked")$a) * 100,2)})
    output$teamWinRateBox <- renderValueBox({
+     validate(
+       need(nrow(data()) > 0, "No matches found!" )
+     )
      valueBox(
        div(paste0(teamWinRate(),"%"), tags$img(src = teamBadgeURL(), height="100px", width="200px")), paste0("Team win rate out of ", nrow(countWins(data(), mode = "teamRanked"))," games played"),
        color = "red"
@@ -169,6 +181,9 @@ server <- function(input, output) {
      mutate(Status = ifelse(a == 1, "win","lose"))})
 
    output$packagePlot <- renderPlot({
+     validate(
+       need(nrow(data()) > 0, "No matches found!" )
+     )
      ggplot(plotData()) +
      geom_bar(aes(x = Event, fill = Status)) +
      facet_wrap(~Mode)
@@ -177,6 +192,9 @@ server <- function(input, output) {
 
 # Table for mode
   output$modeTable <- renderTable({
+    validate(
+      need(nrow(data()) > 0, "No matches found!" )
+    )
     data() %>%
      group_by(Event, Mode) %>%
      summarise("Win Rate" = mean(countWins(data(), Event, Mode)$a), "Games Played" = nrow(countWins(data(), Event, mode = Mode ))) %>%
@@ -189,6 +207,9 @@ server <- function(input, output) {
 
    #My best brawler progress bar
    output$brawlerProgress <- renderUI({
+     validate(
+       need(nrow(data()) > 0, "No matches found!" )
+     )
      bb <- inner_join(countWins(data()), select(data(),Me, Mode, SD), by = "SD") %>%
        distinct() %>%
        group_by(Me) %>%
@@ -210,6 +231,9 @@ server <- function(input, output) {
 
    #My best map table
    output$mapProgress <- renderUI({
+     validate(
+       need(nrow(data()) > 0, "No matches found!" )
+     )
      bm <- inner_join(countWins(data()), select(data(),Map, Mode, SD, Event), by = "SD") %>%
        distinct() %>%
        group_by(Map) %>%
